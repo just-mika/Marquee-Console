@@ -3,6 +3,7 @@
 #include <deque>
 #include <Windows.h>
 #include <string>
+#include <cmath>
 
 struct Vec3 { float x, y, z; };
 struct Vec2 { float x, y; };
@@ -12,18 +13,14 @@ const int MSG_START_ROW = 24;
 const int CONSOLE_W = 80;
 const int CONSOLE_H = 34;
 
-CHAR_INFO backBuffer[CONSOLE_H][CONSOLE_W];
-
-void clearBuffer();
-void writeToBuffer(int x, int y, const std::string& text);
-void flushBuffer();
-
 void printHeader();
 
 Vec3 rotateY(Vec3 v, float angle);
 Vec2 project(Vec3 v);
 void toScreenCoords(Vec2 p, int& screenX, int& screenY);
 void drawEdge(Vec2 start, Vec2 end);
+
+void setCursorPosition(int x, int y);
 
 int main()
 {
@@ -33,7 +30,6 @@ int main()
 	cursorInfo.bVisible = FALSE;
 	SetConsoleCursorInfo(hOut, &cursorInfo);
 
-	int posMessage = CONSOLE_H - 5;
 	std::string input = "";
 	std::deque<std::string> messages;
 
@@ -44,7 +40,7 @@ int main()
 		{ -1, -1.0, -1.0 },
 		{ -1.0, 1.0,  1.0 },
 		{ 1.0, 1.0, 1.0 },
-		{ -1.0, -1.0, 1.0 }, 
+		{ -1.0, -1.0, 1.0 },
 		{ 1.0, -1.0, 1.0 }
 	};
 
@@ -56,7 +52,7 @@ int main()
 		{ {-1.0f, -1.0f, 1.0f } , { 1.0f, -1.0f, 1.0f } },
 
 		{ {1.0f, -1.0f, -1.0f } , { 1.0f, -1.0f, 1.0f } },
-		{ {-1.0f, -1.0f, -1.0f } , { -1.0f, -1.0f, 1.0f } }, 
+		{ {-1.0f, -1.0f, -1.0f } , { -1.0f, -1.0f, 1.0f } },
 		{ {1.0f, 1.0f, -1.0f } , { 1.0f, 1.0f, 1.0f } },
 		{ {-1.0f, 1.0f, -1.0f } , { -1.0f, 1.0f, 1.0f } },
 
@@ -71,25 +67,27 @@ int main()
 	int posX = 0;
 	int posY = 0;
 
+	system("cls");
 	while (true)
 	{
-		clearBuffer();
+		angle++;
 
-		// 1. Print header layout
+		system("cls");
+
+		// header
 		printHeader();
 
-		// 2. Increment (x,y) cursor position of marquee text;
-		angle++;
-		//draw vertices
+		// draw vertices
 		for (int i = 0; i < 8; i++)
 		{
 			Vec3 rotated = rotateY(vertices[i], angle * 0.01f);
 			Vec2 projected = project(rotated);
 			toScreenCoords(projected, posX, posY);
-			writeToBuffer(posX, posY, "*");
+			setCursorPosition(posX, posY);
+			std::cout << "*";
 		}
 
-		//draw edges
+		// draw edges
 		for (int i = 0; i < 12; i++)
 		{
 			Vec3 rotatedStart = rotateY(edges[i][0], angle * 0.01f);
@@ -97,118 +95,67 @@ int main()
 			Vec2 projectedStart = project(rotatedStart);
 			Vec2 projectedEnd = project(rotatedEnd);
 			int startX, startY, endX, endY;
+
 			toScreenCoords(projectedStart, startX, startY);
 			toScreenCoords(projectedEnd, endX, endY);
 			drawEdge({ (float)startX, (float)startY }, { (float)endX, (float)endY });
 		}
 
-		// 4. Print command input field
-		writeToBuffer(0, MSG_START_ROW - 1, "Write a message: " + input);
-		
+		setCursorPosition(0, MSG_START_ROW - 1);
+		std::cout << "Write a message: " << input;
+
 		int i = 1;
 		for (std::string message : messages)
 		{
-			writeToBuffer(0, MSG_START_ROW + i, "You entered: " + message);
+			setCursorPosition(0, MSG_START_ROW + i);
+			std::cout << "You entered: " << message;
 			i++;
 		}
 
-		flushBuffer();
-
+		
 		Sleep(10);
-
-		// 5. Poll keyboard event
-		// 6. Check keyboard hit
 
 		if (_kbhit())
 		{
 			char key = _getch();
 			if (key == '\b' && !input.empty())
 				input.pop_back();
-			else if (key == '\r')
+			else if (key == '\r' && !input.empty())
 			{
 				messages.push_back(input);
 				input.clear();
 
 				if (messages.size() >= 10)
-				{
 					messages.pop_front();
-				}
 			}
-			else if (key >= 32 && key <= 126) // Printable characters
+			else if (key >= 32 && key <= 126 && input.size() < 70)
 				input += key;
-			//std::cout << "Key pressed: " << key << std::endl;
 		}
 	}
-}
-
-// Clears the back buffer by filling it with spaces and default attributes
-void clearBuffer()
-{
-	for (int y = 0; y < CONSOLE_H; y++)
-	{
-		for (int x = 0; x < CONSOLE_W; x++)
-		{
-			backBuffer[y][x].Char.AsciiChar = ' ';
-			backBuffer[y][x].Attributes = 0x0;
-		}
-	}
-}
-
-// Writes a string to the back buffer at the specified (x, y) position
-// params: x and y coordinates, text to write
-void writeToBuffer(int x, int y, const std::string& text)
-{
-	for (int i = 0; i < (int)text.size(); i++)
-	{
-		int bx = x + i;
-		if (bx < 0 || bx >= CONSOLE_W || y < 0 || y >= CONSOLE_H) continue;
-		backBuffer[y][bx].Char.AsciiChar = text[i];
-		backBuffer[y][bx].Attributes = 0x07;
-	}
-}
-
-// Flushes the back buffer to the console output using WriteConsoleOutput API
-void flushBuffer()
-{
-	HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-	COORD bufferSize = { CONSOLE_W, CONSOLE_H };
-	COORD bufferCoord = { 0, 0 };
-	SMALL_RECT writeRegion = { 0, 0, CONSOLE_W - 1, CONSOLE_H - 1 };
-	WriteConsoleOutput(hOut, (CHAR_INFO*)backBuffer, bufferSize, bufferCoord, &writeRegion);
 }
 
 void printHeader()
 {
-	writeToBuffer(0, 0, "++++++++++++++++++++++++++++++++++++++++");
-	writeToBuffer(0, 1, "      Displaying a marquee console      ");
-	writeToBuffer(0, 2, "++++++++++++++++++++++++++++++++++++++++");
+	std::cout << "++++++++++++++++++++++++++++++++++++++++\n";
+	std::cout << "      Displaying a marquee console      \n";
+	std::cout << "++++++++++++++++++++++++++++++++++++++++\n";
 }
 
-// Rotates a 3D vector around the Y-axis by a given angle
-// params: 3D vector, rotation angle in radians
-// returns: rotated 3D vector
 Vec3 rotateY(Vec3 v, float angle)
 {
 	float x = (v.x * cos(angle)) + (v.z * sin(angle));
 	float z = -(v.x * sin(angle)) + (v.z * cos(angle));
-
 	return { x, v.y, z };
 }
 
-// Projects 3D coordinates to 2D screen coordinates using perspective projection
-// params: 3D point
-// returns: projected 2D point
 Vec2 project(Vec3 v)
 {
 	float offset = 3.0f;
 	float screenX = v.x / (v.z + offset);
 	float screenY = v.y / (v.z + offset);
-
 	return { screenX, screenY };
 }
 
-// Converts projected 2D coordinates to screen coordinates
-// params: projected 2D point, output screen coordinates (screenX, screenY)
 void toScreenCoords(Vec2 p, int& screenX, int& screenY)
 {
 	float xScale = 7.5f;
@@ -220,14 +167,17 @@ void toScreenCoords(Vec2 p, int& screenX, int& screenY)
 	screenY = static_cast<int>(p.y * yScale + center.y);
 }
 
-//draws edge between two points using Bresenham's line algorithm
-// params: start and end points of the edge
+void setCursorPosition(int x, int y)
+{
+	COORD c = { (SHORT)x, (SHORT)y };
+	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), c);
+}
+
 void drawEdge(Vec2 start, Vec2 end)
 {
-	//calculate delta x and y
 	float dx = end.x - start.x;
 	float dy = end.y - start.y;
-	
+
 	int stepX = (dx > 0) ? 1 : -1;
 	int stepY = (dy > 0) ? 1 : -1;
 
@@ -242,7 +192,6 @@ void drawEdge(Vec2 start, Vec2 end)
 		swapped = true;
 	}
 
-	//calculate decision parameter
 	float d = 2 * dy - dx;
 	float posX = start.x;
 	float posY = start.y;
@@ -253,7 +202,6 @@ void drawEdge(Vec2 start, Vec2 end)
 		std::swap(stepX, stepY);
 	}
 
-	//decision parameter loop
 	for (int i = 0; i < dx; i++)
 	{
 		if (d < 0)
@@ -261,17 +209,18 @@ void drawEdge(Vec2 start, Vec2 end)
 			d = d + 2 * dy;
 			posX = posX + stepX;
 		}
-		else if (d >= 0)
+		else
 		{
 			d = d + 2 * (dy - dx);
 			posX = posX + stepX;
 			posY = posY + stepY;
 		}
 
-		if (swapped)
-			writeToBuffer(posY, posX, "*");
-		else
-			writeToBuffer(posX, posY, "*");
+		int wx = swapped ? (int)posY : (int)posX;
+		int wy = swapped ? (int)posX : (int)posY;
+
+
+		setCursorPosition(wx, wy);
+		std::cout << "*";
 	}
 }
-
