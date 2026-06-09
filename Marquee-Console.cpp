@@ -3,6 +3,7 @@
 #include <deque>
 #include <Windows.h>
 #include <string>
+#include <sstream>
 
 struct Vec3 { float x, y, z; };
 struct Vec2 { float x, y; };
@@ -19,6 +20,7 @@ void writeToBuffer(int x, int y, const std::string& text);
 void flushBuffer();
 
 void printHeader();
+std::string handleCommand(std::string input, int& sleepMs);
 
 Vec3 rotateY(Vec3 v, float angle);
 Vec2 project(Vec3 v);
@@ -35,7 +37,7 @@ int main()
 
 	int posMessage = CONSOLE_H - 5;
 	std::string input = "";
-	std::deque<std::string> messages;
+	std::string feedback = "";
 
 	Vec3 vertices[8] = {
 		{ -1.0, 1.0, -1.0 },
@@ -70,17 +72,19 @@ int main()
 	float angle = 0.0f;
 	int posX = 0;
 	int posY = 0;
+	int sleepMs = 16; // ~60 FPS
 
 	while (true)
-	{
+	{		
 		clearBuffer();
 
 		// 1. Print header layout
 		printHeader();
 
-		// 2. Increment (x,y) cursor position of marquee text;
+		// 2. Increment cube rotation angle
 		angle++;
-		//draw vertices
+		
+		// 3a. Draw vertices
 		for (int i = 0; i < 8; i++)
 		{
 			Vec3 rotated = rotateY(vertices[i], angle * 0.01f);
@@ -89,7 +93,7 @@ int main()
 			writeToBuffer(posX, posY, "*");
 		}
 
-		//draw edges
+		// 3b. Draw edges
 		for (int i = 0; i < 12; i++)
 		{
 			Vec3 rotatedStart = rotateY(edges[i][0], angle * 0.01f);
@@ -103,40 +107,33 @@ int main()
 		}
 
 		// 4. Print command input field
-		writeToBuffer(0, MSG_START_ROW - 1, "Write a message: " + input);
-		
-		int i = 1;
-		for (std::string message : messages)
-		{
-			writeToBuffer(0, MSG_START_ROW + i, "You entered: " + message);
-			i++;
-		}
+		writeToBuffer(0, MSG_START_ROW - 1, "Enter command: " + input);
+
+		writeToBuffer(0, MSG_START_ROW + 1, feedback);
 
 		flushBuffer();
 
-		Sleep(10);
+		Sleep(sleepMs);
 
 		// 5. Poll keyboard event
-		// 6. Check keyboard hit
 
 		if (_kbhit())
 		{
 			char key = _getch();
+
+			// 6. Check keyboard hit
 			if (key == '\b' && !input.empty())
 				input.pop_back();
 			else if (key == '\r')
 			{
-				messages.push_back(input);
-				input.clear();
-
-				if (messages.size() >= 10)
+				if (!input.empty())
 				{
-					messages.pop_front();
+					feedback = handleCommand(input, sleepMs);
 				}
+				input.clear();
 			}
-			else if (key >= 32 && key <= 126) // Printable characters
+			else if (key >= 32 && key <= 126)
 				input += key;
-			//std::cout << "Key pressed: " << key << std::endl;
 		}
 	}
 }
@@ -149,7 +146,6 @@ void clearBuffer()
 		for (int x = 0; x < CONSOLE_W; x++)
 		{
 			backBuffer[y][x].Char.AsciiChar = ' ';
-			backBuffer[y][x].Attributes = 0x0;
 		}
 	}
 }
@@ -275,3 +271,18 @@ void drawEdge(Vec2 start, Vec2 end)
 	}
 }
 
+std::string handleCommand(std::string input, int& sleepMs)
+{
+	std::stringstream ss(input);
+	std::string command;
+	ss >> command;
+	if (command == "speed")
+	{
+		int ms = 0;
+		ss >> ms;
+		sleepMs = ms;
+		return "Speed set to " + std::to_string(ms) + " ms";
+	}
+
+	return "Message: " + input;
+}
