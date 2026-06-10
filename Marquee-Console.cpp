@@ -72,7 +72,7 @@ int main()
 	float angle = 0.0f;
 	int posX = 0;
 	int posY = 0;
-	int sleepMs = 16; // ~60 FPS
+	int sleepMs = 7;
 
 	while (true)
 	{		
